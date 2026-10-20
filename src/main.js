@@ -73,7 +73,7 @@ function authView(mode = 'login', message = '') {
     try { await initialize(); } catch (error) { handleInitializationError(error); }
   };
   document.querySelector('#google').onclick = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: 'https://sellerbookscore.github.io/', queryParams: { prompt: 'select_account' } } });
     if (error) document.querySelector('#form-message').innerHTML = alertBox(`${t('googleError')} ${error.message}`, 'error');
   };
 }
