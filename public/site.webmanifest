@@ -1,0 +1,15 @@
+{
+  "name": "SellerBooks Core",
+  "short_name": "SellerBooks",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#071a35",
+  "background_color": "#f3f6fb",
+  "display": "standalone"
+}
