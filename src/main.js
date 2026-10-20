@@ -1,10 +1,17 @@
 import './style.css';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 const env = import.meta.env || {};
 const supabaseUrl = env.VITE_SUPABASE_URL || window.SELLERBOOKS_CONFIG?.supabaseUrl;
 const supabaseKey = env.VITE_SUPABASE_ANON_KEY || window.SELLERBOOKS_CONFIG?.supabaseAnonKey;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+let supabase = null;
+let supabaseInitError = '';
+try {
+  supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+} catch (error) {
+  supabaseInitError = error instanceof Error ? error.message : String(error);
+  console.error('SellerBooks Core Supabase initialization failed:', error);
+}
 let lang = localStorage.getItem('sellerbooks-core-language') === 'EN' ? 'EN' : 'ID';
 let currentUser = null;
 let currentAccess = null;
@@ -18,7 +25,7 @@ const copy = {
     suspended: 'Akses akun Anda sedang ditangguhkan.', approved: 'Akun Anda disetujui. Portal aplikasi siap dihubungkan.',
     admin: 'Panel Superadmin', users: 'Permintaan akses client', refresh: 'Muat ulang', approve: 'Setujui', reject: 'Tolak', suspend: 'Tangguhkan',
     status: 'Status', id: 'ID pengguna', signout: 'Keluar', language: 'Bahasa', note: 'Catatan (opsional)',
-    config: 'Konfigurasi belum lengkap. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment deployment.',
+    config: supabaseInitError ? `Inisialisasi Supabase gagal: ${supabaseInitError}` : 'Konfigurasi belum lengkap. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment deployment.',
     loadError: 'Gagal memuat data.', empty: 'Belum ada permintaan akses.', signedIn: 'Berhasil masuk.', registerOk: 'Pendaftaran dikirim. Periksa email jika konfirmasi diminta.',
     googleError: 'Google Login belum siap. Periksa konfigurasi provider dan URL redirect di Supabase.', notAdmin: 'Akun ini bukan Superadmin.',
     accessTitle: 'Status akses', unknown: 'Belum ada status akses. Silakan daftar atau muat ulang.',
@@ -30,7 +37,7 @@ const copy = {
     suspended: 'Your account access is suspended.', approved: 'Your account is approved. The application portal can now be connected.',
     admin: 'Superadmin panel', users: 'Client access requests', refresh: 'Refresh', approve: 'Approve', reject: 'Reject', suspend: 'Suspend',
     status: 'Status', id: 'User ID', signout: 'Sign out', language: 'Language', note: 'Note (optional)',
-    config: 'Configuration is incomplete. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment environment.',
+    config: supabaseInitError ? `Supabase initialization failed: ${supabaseInitError}` : 'Configuration is incomplete. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment environment.',
     loadError: 'Failed to load data.', empty: 'No access requests yet.', signedIn: 'Signed in successfully.', registerOk: 'Registration submitted. Check your email if confirmation is required.',
     googleError: 'Google Login is not ready. Check the provider and redirect URL configuration in Supabase.', notAdmin: 'This account is not a Superadmin.',
     accessTitle: 'Access status', unknown: 'No access status found. Register or refresh the page.',
