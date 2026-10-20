@@ -11,7 +11,7 @@ Standalone Core portal for SellerBooks clients and administrators.
 
 ## Current status
 
-This repository is being initialized. The frontend must be configured with the public Supabase project URL and anon/publishable key before authentication can be tested.
+The frontend is configured at build time using the GitHub Actions variables `VITE_SUPABASE_URL` and secret `VITE_SUPABASE_ANON_KEY`. Authentication can be tested after a successful deployment with both values available to the build.
 
 ## Security notes
 
