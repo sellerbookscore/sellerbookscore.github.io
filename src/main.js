@@ -1,5 +1,5 @@
 import './style.css';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const env = import.meta.env || {};
 const supabaseUrl = env.VITE_SUPABASE_URL || window.SELLERBOOKS_CONFIG?.supabaseUrl;
