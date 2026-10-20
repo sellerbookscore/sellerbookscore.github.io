@@ -25,6 +25,9 @@
         <p><a href="https://sellerbookscore.github.io/?refresh=1">Muat ulang SellerBooks Core</a></p>
       </div></main>
     </div>
+    <script type="importmap">
+      {"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2"}}
+    </script>
     <script>
       window.SELLERBOOKS_CONFIG = window.SELLERBOOKS_CONFIG || {};
       window.addEventListener('error', function (event) {
@@ -36,6 +39,6 @@
         if (target) target.textContent = 'Gagal memuat aplikasi: ' + (event.reason && event.reason.message ? event.reason.message : String(event.reason)) + '.';
       });
     </script>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=fix3"></script>
   </body>
 </html>
