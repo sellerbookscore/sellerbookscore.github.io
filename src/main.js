@@ -64,7 +64,13 @@ function authView(mode = 'login', message = '') {
     const result = isRegister ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + window.location.pathname } }) : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) { status.innerHTML = alertBox(result.error.message, 'error'); return; }
     if (isRegister && !result.data.session) { status.innerHTML = alertBox(t('registerOk'), 'success'); return; }
-    await initialize();
+    if (!result.data.session?.user) {
+      status.innerHTML = alertBox(lang === 'ID' ? 'Login berhasil dikirim, tetapi sesi belum tersedia. Periksa konfirmasi email atau coba masuk kembali.' : 'Sign-in completed, but no session is available yet. Check email confirmation or try signing in again.', 'warning');
+      return;
+    }
+    currentUser = result.data.session.user;
+    status.innerHTML = alertBox(lang === 'ID' ? 'Berhasil masuk. Memuat akses akun…' : 'Signed in. Loading account access…', 'success');
+    try { await initialize(); } catch (error) { handleInitializationError(error); }
   };
   document.querySelector('#google').onclick = async () => {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
@@ -123,9 +129,19 @@ function render() {
   clientView();
 }
 supabase?.auth.onAuthStateChange((_event, session) => {
-  currentUser = session?.user || null;
-  if (!currentUser) { currentAccess = null; isAdmin = false; authView(); }
-  else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') setTimeout(() => initialize().catch(handleInitializationError), 0);
+  if (session?.user) {
+    currentUser = session.user;
+    if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED' || _event === 'INITIAL_SESSION') {
+      setTimeout(() => initialize().catch(handleInitializationError), 0);
+    }
+    return;
+  }
+  if (_event === 'SIGNED_OUT') {
+    currentUser = null;
+    currentAccess = null;
+    isAdmin = false;
+    authView();
+  }
 });
 function handleInitializationError(error) {
   console.error('SellerBooks Core initialization failed:', error);
