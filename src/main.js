@@ -64,12 +64,7 @@ function authView(mode = 'login', message = '') {
     const result = isRegister ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin + window.location.pathname } }) : await supabase.auth.signInWithPassword({ email, password });
     if (result.error) { status.innerHTML = alertBox(result.error.message, 'error'); return; }
     if (isRegister && !result.data.session) { status.innerHTML = alertBox(t('registerOk'), 'success'); return; }
-    await // Render the login screen immediately; session restoration must not leave a permanent loading screen.
-authView();
-initialize().catch((error) => {
-  console.error('SellerBooks Core initialization failed:', error);
-  authView('login', `${t('loadError')} ${error instanceof Error ? error.message : String(error)}`);
-});
+    await initialize();
   };
   document.querySelector('#google').onclick = async () => {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
@@ -130,6 +125,11 @@ function render() {
 supabase?.auth.onAuthStateChange((_event, session) => {
   currentUser = session?.user || null;
   if (!currentUser) { currentAccess = null; isAdmin = false; authView(); }
-  else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') setTimeout(initialize, 0);
+  else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') setTimeout(() => initialize().catch(handleInitializationError), 0);
 });
-initialize();
+function handleInitializationError(error) {
+  console.error('SellerBooks Core initialization failed:', error);
+  authView('login', `${t('loadError')} ${error instanceof Error ? error.message : String(error)}`);
+}
+authView();
+initialize().catch(handleInitializationError);
