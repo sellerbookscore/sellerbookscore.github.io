@@ -16,6 +16,7 @@ let lang = localStorage.getItem('sellerbooks-core-language') === 'EN' ? 'EN' : '
 let currentUser = null;
 let currentAccess = null;
 let isAdmin = false;
+let initializationPromise = null;
 
 const copy = {
   ID: {
@@ -27,7 +28,7 @@ const copy = {
     status: 'Status', id: 'ID pengguna', signout: 'Keluar', language: 'Bahasa', note: 'Catatan (opsional)',
     config: supabaseInitError ? `Inisialisasi Supabase gagal: ${supabaseInitError}` : 'Konfigurasi belum lengkap. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment deployment.',
     loadError: 'Gagal memuat data.', empty: 'Belum ada permintaan akses.', signedIn: 'Berhasil masuk.', registerOk: 'Pendaftaran dikirim. Periksa email jika konfirmasi diminta.',
-    googleError: 'Google Login belum siap. Periksa konfigurasi provider dan URL redirect di Supabase.', notAdmin: 'Akun ini bukan Superadmin.',
+    googleError: 'Google Login belum siap. Periksa konfigurasi provider dan URL redirect di Supabase.', oauthCallbackError: 'Login Google belum selesai: ', notAdmin: 'Akun ini bukan Superadmin.',
     accessTitle: 'Status akses', unknown: 'Belum ada status akses. Silakan daftar atau muat ulang.',
   },
   EN: {
@@ -39,7 +40,7 @@ const copy = {
     status: 'Status', id: 'User ID', signout: 'Sign out', language: 'Language', note: 'Note (optional)',
     config: supabaseInitError ? `Supabase initialization failed: ${supabaseInitError}` : 'Configuration is incomplete. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment environment.',
     loadError: 'Failed to load data.', empty: 'No access requests yet.', signedIn: 'Signed in successfully.', registerOk: 'Registration submitted. Check your email if confirmation is required.',
-    googleError: 'Google Login is not ready. Check the provider and redirect URL configuration in Supabase.', notAdmin: 'This account is not a Superadmin.',
+    googleError: 'Google Login is not ready. Check the provider and redirect URL configuration in Supabase.', oauthCallbackError: 'Google sign-in could not be completed: ', notAdmin: 'This account is not a Superadmin.',
     accessTitle: 'Access status', unknown: 'No access status found. Register or refresh the page.',
   }
 };
@@ -73,28 +74,73 @@ function authView(mode = 'login', message = '') {
     try { await initialize(); } catch (error) { handleInitializationError(error); }
   };
   document.querySelector('#google').onclick = async () => {
+    const button = document.querySelector('#google');
+    button.disabled = true;
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname, queryParams: { prompt: 'select_account' } } });
-    if (error) document.querySelector('#form-message').innerHTML = alertBox(`${t('googleError')} ${error.message}`, 'error');
+    if (error) {
+      const target = document.querySelector('#form-message');
+      if (target) target.innerHTML = alertBox(`${t('googleError')} ${error.message}`, 'error');
+      button.disabled = false;
+    }
   };
 }
 async function initialize() {
-  if (!supabase) return authView();
-  const { data } = await supabase.auth.getSession();
-  currentUser = data.session?.user || null;
-  if (!currentUser) { authView(); return; }
-  const [adminRes, accessRes] = await Promise.all([
-    supabase.from('sellerbooks_core_admins').select('role,is_active').eq('user_id', currentUser.id).maybeSingle(),
-    supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle(),
-  ]);
-  isAdmin = Boolean(adminRes.data?.is_active && ['superadmin', 'admin'].includes(adminRes.data?.role));
-  currentAccess = accessRes.data;
-  if (isAdmin) { await adminView(); return; }
-  if (!currentAccess) {
-    await supabase.rpc('sellerbooks_request_access');
-    const refreshed = await supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle();
-    currentAccess = refreshed.data;
+  if (initializationPromise) return initializationPromise;
+  initializationPromise = (async () => {
+    if (!supabase) return authView();
+    // Supabase PKCE OAuth returns a ?code=... callback. Exchange it explicitly
+    // before checking the session so the login view cannot win a race.
+    const url = new URL(window.location.href);
+    const oauthCode = url.searchParams.get('code');
+    if (oauthCode) {
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(oauthCode);
+      url.searchParams.delete('code');
+      url.searchParams.delete('error');
+      url.searchParams.delete('error_description');
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+      if (exchangeError) {
+        console.error('SellerBooks Core OAuth callback exchange failed:', exchangeError);
+        return authView('login', alertBox(`${t('oauthCallbackError')}${exchangeError.message}`, 'error'));
+      }
+    } else {
+      const oauthError = url.searchParams.get('error_description') || url.searchParams.get('error');
+      if (oauthError) {
+        url.searchParams.delete('error');
+        url.searchParams.delete('error_description');
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        return authView('login', alertBox(`${t('oauthCallbackError')}${oauthError}`, 'error'));
+      }
+    }
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('SellerBooks Core session restore failed:', sessionError);
+      return authView('login', alertBox(`${t('oauthCallbackError')}${sessionError.message}`, 'error'));
+    }
+    currentUser = data.session?.user || null;
+    if (!currentUser) { authView(); return; }
+    const [adminRes, accessRes] = await Promise.all([
+      supabase.from('sellerbooks_core_admins').select('role,is_active').eq('user_id', currentUser.id).maybeSingle(),
+      supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle(),
+    ]);
+    if (adminRes.error) console.warn('SellerBooks Core admin lookup failed:', adminRes.error);
+    if (accessRes.error) console.warn('SellerBooks Core access lookup failed:', accessRes.error);
+    isAdmin = Boolean(adminRes.data?.is_active && ['superadmin', 'admin'].includes(adminRes.data?.role));
+    currentAccess = accessRes.data;
+    if (isAdmin) { await adminView(); return; }
+    if (!currentAccess) {
+      const { error: requestError } = await supabase.rpc('sellerbooks_request_access');
+      if (requestError) console.warn('SellerBooks Core access request failed:', requestError);
+      const refreshed = await supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle();
+      if (refreshed.error) console.warn('SellerBooks Core access refresh failed:', refreshed.error);
+      currentAccess = refreshed.data;
+    }
+    render();
+  })();
+  try {
+    return await initializationPromise;
+  } finally {
+    initializationPromise = null;
   }
-  render();
 }
 function clientView() {
   const status = String(currentAccess?.status || 'PENDING').toUpperCase();
