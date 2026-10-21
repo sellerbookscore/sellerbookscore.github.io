@@ -199,7 +199,7 @@ async function loadRequests() {
 async function deleteClientRequest(userId) {
   const modal = document.createElement('div');
   modal.className = 'modal-backdrop';
-  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus akun client?' : 'Delete client account?'}</h2><p class="muted">${lang === 'ID' ? 'Akun dan data terkait akan dihapus. Tindakan ini tidak dapat dibatalkan.' : 'The account and related data will be deleted. This action cannot be undone.'}</p><div class="modal-actions"><button class="button quiet" id="client-delete-cancel">${t('cancel')}</button><button class="button danger" id="client-delete-confirm">${lang === 'ID' ? 'Ya, hapus' : 'Yes, delete'}</button></div></section>`;
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus akun client?' : 'Delete client account?'}</h2><p class="muted">${lang === 'ID' ? 'Akun client akan dihapus permanen.' : 'The client account will be permanently deleted.'}</p><div class="modal-actions"><button class="button quiet" id="client-delete-cancel">${t('cancel')}</button><button class="button danger" id="client-delete-confirm">${t('confirm')}</button></div></section>`;
   document.body.appendChild(modal);
   modal.querySelector('#client-delete-cancel').onclick = () => modal.remove();
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
