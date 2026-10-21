@@ -199,14 +199,14 @@ async function loadRequests() {
 async function deleteClientRequest(userId) {
   const modal = document.createElement('div');
   modal.className = 'modal-backdrop';
-  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus permintaan akses client?' : 'Delete client access request?'}</h2><p class="muted">${lang === 'ID' ? 'Permintaan akses, riwayat persetujuan, dan data profil persetujuan akan dihapus/reset. Akun login Gmail dan data penjualan tetap aman. Saat Gmail ini login kembali, sistem akan membuat permintaan PENDING dari awal.' : 'The access request, approval history, and approval profile will be removed/reset. The Gmail login and sales data remain intact. When this Gmail signs in again, a new PENDING request will be created.'}</p><div class="modal-actions"><button class="button quiet" id="client-delete-cancel">${t('cancel')}</button><button class="button danger" id="client-delete-confirm">${lang === 'ID' ? 'Hapus' : 'Delete'}</button></div></section>`;
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus akun Gmail client secara permanen?' : 'Permanently delete client Gmail account?'}</h2><p class="muted">${lang === 'ID' ? 'Akun Gmail akan dihapus dari Supabase Auth sehingga tidak bisa login lagi dengan akun lama. Data bisnis (profil, pengaturan, toko, koneksi API, pesanan, dan item pesanan yang tersedia) akan diarsipkan terlebih dahulu. Data yang diarsipkan tidak otomatis tampil kembali. Akun Superadmin dan Operator dilindungi.' : 'The Gmail account will be removed from Supabase Auth and can no longer sign in with the old account. Available business data (profile, settings, stores, API connections, orders and order items) will be archived first. Archived data will not automatically reappear. Superadmin and Operator accounts are protected.'}</p><div class="modal-actions"><button class="button quiet" id="client-delete-cancel">${t('cancel')}</button><button class="button danger" id="client-delete-confirm">${lang === 'ID' ? 'Hapus akun dan arsipkan data' : 'Delete account and archive data'}</button></div></section>`;
   document.body.appendChild(modal);
   modal.querySelector('#client-delete-cancel').onclick = () => modal.remove();
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   modal.querySelector('#client-delete-confirm').onclick = async () => {
     const btn = modal.querySelector('#client-delete-confirm'); btn.disabled = true; btn.textContent = t('saving');
     const { error } = await supabase.rpc('sellerbooks_core_delete_client_access_request', { p_user_id: userId });
-    if (error) { modal.querySelector('.confirm-modal').insertAdjacentHTML('beforeend', alertBox(`${t('loadError')} ${error.message}`, 'error')); btn.disabled = false; btn.textContent = lang === 'ID' ? 'Hapus' : 'Delete'; return; }
+    if (error) { modal.querySelector('.confirm-modal').insertAdjacentHTML('beforeend', alertBox(`${t('loadError')} ${error.message}`, 'error')); btn.disabled = false; btn.textContent = lang === 'ID' ? 'Hapus akun dan arsipkan data' : 'Delete account and archive data'; return; }
     modal.remove(); await loadRequests();
   };
 }
