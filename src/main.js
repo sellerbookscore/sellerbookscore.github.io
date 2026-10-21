@@ -160,11 +160,27 @@ async function loadRequests() {
   const { data, error } = await supabase.rpc('sellerbooks_core_list_access_requests_v2');
   if (error) { target.innerHTML = alertBox(`${t('loadError')} ${error.message}`, 'error'); return; }
   if (!data?.length) { target.innerHTML = `<p class="muted">${t('empty')}</p>`; return; }
-  target.innerHTML = data.map((item) => `<article class="request"><div class="request-info"><strong>${esc(item.email || item.user_id)}</strong>${item.owner_name ? `<small class="owner-name">${lang === 'ID' ? 'Nama pemilik/usaha' : 'Owner / business name'}: <strong>${esc(item.owner_name)}</strong></small>` : `<small class="owner-name missing">${lang === 'ID' ? 'Nama pemilik belum diisi' : 'Owner name not provided'}</small>`}<small>${esc(item.user_id)}</small><span class="status ${item.status === 'APPROVED' ? 'good' : item.status === 'REJECTED' || item.status === 'SUSPENDED' || item.status === 'REVOKED' ? 'bad' : 'waiting'}">${esc(({ PENDING: lang === 'ID' ? 'MENUNGGU' : 'PENDING', APPROVED: lang === 'ID' ? 'DISETUJUI' : 'APPROVED', REJECTED: lang === 'ID' ? 'DITOLAK' : 'REJECTED', SUSPENDED: lang === 'ID' ? 'DITANGGUHKAN' : 'SUSPENDED', REVOKED: lang === 'ID' ? 'DICABUT' : 'REVOKED' })[String(item.status || 'PENDING').toUpperCase()] || item.status)}</span><small>${esc(new Date(item.requested_at).toLocaleString(lang === 'ID' ? 'id-ID' : 'en-US'))}</small>${item.review_note ? `<small>${esc(item.review_note)}</small>` : ''}</div><div class="request-actions"><button class="button small primary" data-status="APPROVED" data-id="${esc(item.user_id)}">${t('approve')}</button><button class="button small quiet" data-status="REJECTED" data-id="${esc(item.user_id)}">${t('reject')}</button><button class="button small danger" data-status="SUSPENDED" data-id="${esc(item.user_id)}">${t('suspend')}</button></div></article>`).join('');
+  target.innerHTML = data.map((item) => `<article class="request"><div class="request-info"><strong>${esc(item.email || item.user_id)}</strong>${item.owner_name ? `<small class="owner-name">${lang === 'ID' ? 'Nama pemilik/usaha' : 'Owner / business name'}: <strong>${esc(item.owner_name)}</strong></small>` : `<small class="owner-name missing">${lang === 'ID' ? 'Nama pemilik belum diisi' : 'Owner name not provided'}</small>`}<small>${esc(item.user_id)}</small><span class="status ${item.status === 'APPROVED' ? 'good' : item.status === 'REJECTED' || item.status === 'SUSPENDED' || item.status === 'REVOKED' ? 'bad' : 'waiting'}">${esc(({ PENDING: lang === 'ID' ? 'MENUNGGU' : 'PENDING', APPROVED: lang === 'ID' ? 'DISETUJUI' : 'APPROVED', REJECTED: lang === 'ID' ? 'DITOLAK' : 'REJECTED', SUSPENDED: lang === 'ID' ? 'DITANGGUHKAN' : 'SUSPENDED', REVOKED: lang === 'ID' ? 'DICABUT' : 'REVOKED' })[String(item.status || 'PENDING').toUpperCase()] || item.status)}</span><small>${esc(new Date(item.requested_at).toLocaleString(lang === 'ID' ? 'id-ID' : 'en-US'))}</small>${item.review_note ? `<small>${esc(item.review_note)}</small>` : ''}</div><div class="request-actions"><button class="button small primary" data-status="APPROVED" data-id="${esc(item.user_id)}">${t('approve')}</button><button class="button small danger" data-status="SUSPENDED" data-id="${esc(item.user_id)}">${t('suspend')}</button><button class="button small quiet" data-status="REJECTED" data-id="${esc(item.user_id)}">${t('reject')}</button><button class="button small danger" data-client-delete="1" data-id="${esc(item.user_id)}">${lang === 'ID' ? 'Hapus' : 'Delete'}</button></div></article>`).join('');
   target.querySelectorAll('[data-status]').forEach((button) => button.addEventListener('click', () => {
     openReviewModal(button.dataset.id, button.dataset.status, button);
   }));
+  target.querySelectorAll('[data-client-delete]').forEach((button) => button.addEventListener('click', () => deleteClientRequest(button.dataset.id)));
 }
+async function deleteClientRequest(userId) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus permintaan akses client?' : 'Delete client access request?'}</h2><p class="muted">${lang === 'ID' ? 'Yang dihapus hanya data permintaan akses dari daftar ini, bukan akun Gmail atau data penjualan client.' : 'Only the access request entry will be removed, not the Gmail account or client sales data.'}</p><div class="modal-actions"><button class="button quiet" id="client-delete-cancel">${t('cancel')}</button><button class="button danger" id="client-delete-confirm">${lang === 'ID' ? 'Hapus' : 'Delete'}</button></div></section>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#client-delete-cancel').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelector('#client-delete-confirm').onclick = async () => {
+    const btn = modal.querySelector('#client-delete-confirm'); btn.disabled = true; btn.textContent = t('saving');
+    const { error } = await supabase.rpc('sellerbooks_core_delete_client_access_request', { p_user_id: userId });
+    if (error) { modal.querySelector('.confirm-modal').insertAdjacentHTML('beforeend', alertBox(`${t('loadError')} ${error.message}`, 'error')); btn.disabled = false; btn.textContent = lang === 'ID' ? 'Hapus' : 'Delete'; return; }
+    modal.remove(); await loadRequests();
+  };
+}
+
 async function loadOperators() {
   const target = document.querySelector('#operator-requests'); if (!target) return;
   const { data, error } = await supabase.rpc('sellerbooks_core_list_operator_requests');
