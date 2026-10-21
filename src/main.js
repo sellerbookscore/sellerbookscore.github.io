@@ -189,11 +189,7 @@ async function loadOperators() {
   target.innerHTML = data.map((x) => {
     const status = String(x.approval_status || 'PENDING').toUpperCase();
     const label = { PENDING: lang === 'ID' ? 'MENUNGGU' : 'PENDING', APPROVED: lang === 'ID' ? 'DISETUJUI' : 'APPROVED', REJECTED: lang === 'ID' ? 'DITOLAK' : 'REJECTED', SUSPENDED: lang === 'ID' ? 'DITANGGUHKAN' : 'SUSPENDED' }[status] || status;
-    let actions = '';
-    if (status === 'PENDING') actions += `<button class="button small primary" data-op-status="APPROVED" data-id="${esc(x.id)}">${t('approve')}</button><button class="button small quiet" data-op-status="REJECTED" data-id="${esc(x.id)}">${t('reject')}</button>`;
-    if (status === 'APPROVED') actions += `<button class="button small danger" data-op-status="SUSPENDED" data-id="${esc(x.id)}">${lang === 'ID' ? 'Tangguhkan' : 'Suspend'}</button>`;
-    if (status === 'SUSPENDED' || status === 'REJECTED') actions += `<button class="button small primary" data-op-status="APPROVED" data-id="${esc(x.id)}">${lang === 'ID' ? 'Aktifkan' : 'Reactivate'}</button>`;
-    actions += `<button class="button small danger" data-op-delete="1" data-id="${esc(x.id)}">${lang === 'ID' ? 'Hapus' : 'Delete'}</button>`;
+    const actions = `<button class="button small primary" data-op-status="APPROVED" data-id="${esc(x.id)}">${t('approve')}</button><button class="button small danger" data-op-status="SUSPENDED" data-id="${esc(x.id)}">${t('suspend')}</button><button class="button small quiet" data-op-status="REJECTED" data-id="${esc(x.id)}">${t('reject')}</button><button class="button small danger" data-op-delete="1" data-id="${esc(x.id)}">${lang === 'ID' ? 'Hapus' : 'Delete'}</button>`;
     return `<article class="request operator-request"><div class="request-info"><strong>${esc(x.operator_email)}</strong><small>${lang === 'ID' ? 'Nama pemilik' : 'Owner'}: <strong>${esc(x.owner_name || (lang === 'ID' ? 'Belum ditentukan' : 'Not specified'))}</strong></small><small>${esc(x.id)}</small><span class="status ${status === 'APPROVED' ? 'good' : status === 'REJECTED' || status === 'SUSPENDED' ? 'bad' : 'waiting'}">${esc(label)}</span><small>${esc(new Date(x.created_at).toLocaleString(lang === 'ID' ? 'id-ID' : 'en-US'))}</small>${x.approval_note ? `<small>${esc(x.approval_note)}</small>` : ''}</div><div class="request-actions">${actions}</div></article>`;
   }).join('');
   target.querySelectorAll('[data-op-status]').forEach(button => button.addEventListener('click', () => reviewOperator(button.dataset.id, button.dataset.opStatus)));
