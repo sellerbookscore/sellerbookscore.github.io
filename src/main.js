@@ -125,25 +125,42 @@ async function initialize() {
     isAdmin = Boolean(adminRes.data?.is_active && ['superadmin', 'admin'].includes(adminRes.data?.role));
     if (isAdmin) { await adminView(); return; }
 
-    // Same lifecycle as Operator: ask the database for access on each authenticated login.
-    // The RPC is idempotent and keeps existing statuses; a deleted request becomes PENDING again.
-    const { data: requestData, error: requestError } = await supabase.rpc('sellerbooks_request_access');
-    if (requestError) {
-      console.error('SellerBooks Core access request failed:', requestError);
-      accessRequestError = requestError.message;
-    }
-
-    const accessRes = await supabase.from('sellerbooks_client_access')
+    // Samakan lifecycle dengan Operator: periksa status terlebih dahulu.
+    // Jika data permintaan sudah dihapus, buat ulang sebagai PENDING melalui RPC.
+    // Status yang masih ada (APPROVED/REJECTED/SUSPENDED) tidak di-reset.
+    let accessRes = await supabase.from('sellerbooks_client_access')
       .select('status,requested_at,review_note')
       .eq('user_id', currentUser.id)
       .maybeSingle();
+
     if (accessRes.error) {
-      console.error('SellerBooks Core access refresh failed:', accessRes.error);
+      console.error('SellerBooks Core access lookup failed:', accessRes.error);
       accessRequestError = accessRes.error.message;
     }
+
+    let requestData = null;
+    if (!accessRes.error && !accessRes.data) {
+      const { data, error } = await supabase.rpc('sellerbooks_request_access');
+      requestData = data || null;
+      if (error) {
+        console.error('SellerBooks Core access request failed:', error);
+        accessRequestError = error.message;
+      }
+
+      // Read again after the RPC instead of relying only on its return payload.
+      accessRes = await supabase.from('sellerbooks_client_access')
+        .select('status,requested_at,review_note')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      if (accessRes.error) {
+        console.error('SellerBooks Core access refresh failed:', accessRes.error);
+        accessRequestError = accessRes.error.message;
+      }
+    }
+
     currentAccess = accessRes.data || requestData || null;
     if (!currentAccess && !accessRequestError) {
-      accessRequestError = 'Permintaan akses belum berhasil dibuat. Silakan tekan Muat ulang.';
+      accessRequestError = 'Permintaan akses belum berhasil dibuat. Tekan Muat ulang untuk mencoba kembali.';
     }
     render();
   })();
