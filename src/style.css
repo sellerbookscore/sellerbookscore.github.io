@@ -96,3 +96,6 @@ body::before, body::after, #app::before, #app::after, .page::before, .page::afte
 
 /* Client owner name in access request list */
 .request-info .owner-name{font-size:12px;color:#52627a;line-height:1.45;overflow-wrap:anywhere}.request-info .owner-name strong{display:inline;color:#14233b;font-size:12px;font-weight:750}.request-info .owner-name.missing{color:#8a94a6;font-style:italic}
+
+/* Operator approval panel, separate from client access approvals */
+.operator-panel{margin-top:22px}.operator-list{display:grid;gap:12px}.operator-request{align-items:flex-start}.operator-request .request-info small{overflow-wrap:anywhere}.operator-request .request-actions{flex-wrap:wrap;justify-content:flex-end;min-width:180px}@media(max-width:700px){.operator-request{flex-direction:column}.operator-request .request-actions{justify-content:flex-start;width:100%;min-width:0}.operator-request .request-actions .button{flex:1}}

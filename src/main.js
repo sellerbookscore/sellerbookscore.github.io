@@ -150,9 +150,10 @@ function clientView() {
   document.querySelector('#reload').onclick = initialize;
 }
 async function adminView() {
-  shell(`<section class="dashboard"><div class="welcome"><div><div class="eyebrow">ADMINISTRATION</div><h1>${t('admin')}</h1><p class="muted">${esc(currentUser.email)}</p></div><span class="status good">SUPERADMIN</span></div><div class="panel"><div class="panel-heading"><div><h2>${t('users')}</h2><p class="muted">${lang === 'ID' ? 'Periksa status lalu tinjau permintaan akses.' : 'Review access requests and update their status.'}</p></div><button id="refresh-requests" class="button quiet">${t('refresh')}</button></div><div id="requests" class="request-list">${alertBox(lang === 'ID' ? 'Memuat permintaan…' : 'Loading requests…')}</div></div></section>`);
+  shell(`<section class="dashboard"><div class="welcome"><div><div class="eyebrow">ADMINISTRATION</div><h1>${t('admin')}</h1><p class="muted">${esc(currentUser.email)}</p></div><span class="status good">SUPERADMIN</span></div><div class="panel"><div class="panel-heading"><div><h2>${t('users')}</h2><p class="muted">${lang === 'ID' ? 'Periksa status lalu tinjau permintaan akses.' : 'Review access requests and update their status.'}</p></div><button id="refresh-requests" class="button quiet">${t('refresh')}</button></div><div id="requests" class="request-list">${alertBox(lang === 'ID' ? 'Memuat permintaan…' : 'Loading requests…')}</div></div><div class="panel operator-panel"><div class="panel-heading"><div><h2>${lang === 'ID' ? 'Persetujuan Operator SellerBooks' : 'SellerBooks Operator Approvals'}</h2><p class="muted">${lang === 'ID' ? 'Kelola permintaan akses Operator secara terpisah dari persetujuan client.' : 'Manage Operator access requests separately from client approvals.'}</p></div><button id="refresh-operators" class="button quiet">${t('refresh')}</button></div><div id="operator-requests" class="operator-list">${alertBox(lang === 'ID' ? 'Memuat permintaan Operator…' : 'Loading Operator requests…')}</div></div></section>`);
   document.querySelector('#refresh-requests').onclick = loadRequests;
-  await loadRequests();
+  document.querySelector('#refresh-operators').onclick = loadOperators;
+  await Promise.all([loadRequests(), loadOperators()]);
 }
 async function loadRequests() {
   const target = document.querySelector('#requests'); if (!target) return;
@@ -164,6 +165,54 @@ async function loadRequests() {
     openReviewModal(button.dataset.id, button.dataset.status, button);
   }));
 }
+async function loadOperators() {
+  const target = document.querySelector('#operator-requests'); if (!target) return;
+  const { data, error } = await supabase.rpc('sellerbooks_core_list_operator_requests');
+  if (error) { target.innerHTML = alertBox(`${t('loadError')} ${error.message}`, 'error'); return; }
+  if (!data?.length) { target.innerHTML = `<p class="muted">${lang === 'ID' ? 'Belum ada permintaan Operator.' : 'No Operator requests yet.'}</p>`; return; }
+  target.innerHTML = data.map((x) => {
+    const status = String(x.approval_status || 'PENDING').toUpperCase();
+    const label = { PENDING: lang === 'ID' ? 'Menunggu' : 'Pending', APPROVED: lang === 'ID' ? 'Disetujui' : 'Approved', REJECTED: lang === 'ID' ? 'Ditolak' : 'Rejected', SUSPENDED: lang === 'ID' ? 'Ditangguhkan' : 'Suspended' }[status] || status;
+    let actions = '';
+    if (status === 'PENDING') actions += `<button class="button small primary" data-op-status="APPROVED" data-id="${esc(x.id)}">${t('approve')}</button><button class="button small quiet" data-op-status="REJECTED" data-id="${esc(x.id)}">${t('reject')}</button>`;
+    if (status === 'APPROVED') actions += `<button class="button small danger" data-op-status="SUSPENDED" data-id="${esc(x.id)}">${lang === 'ID' ? 'Tangguhkan' : 'Suspend'}</button>`;
+    if (status === 'SUSPENDED' || status === 'REJECTED') actions += `<button class="button small primary" data-op-status="APPROVED" data-id="${esc(x.id)}">${lang === 'ID' ? 'Aktifkan' : 'Reactivate'}</button>`;
+    actions += `<button class="button small danger" data-op-delete="1" data-id="${esc(x.id)}">${lang === 'ID' ? 'Hapus' : 'Delete'}</button>`;
+    return `<article class="request operator-request"><div class="request-info"><strong>${esc(x.operator_email)}</strong><small>${lang === 'ID' ? 'Nama pemilik' : 'Owner'}: ${esc(x.owner_name || (lang === 'ID' ? 'Belum ditentukan' : 'Not specified'))}</small><small>${esc(x.core_name)} · ${esc(x.module_slug)} · ${esc(x.client_name)}</small><span class="status ${status === 'APPROVED' ? 'good' : status === 'REJECTED' || status === 'SUSPENDED' ? 'bad' : 'waiting'}">${esc(label)}</span><small>${esc(new Date(x.created_at).toLocaleString(lang === 'ID' ? 'id-ID' : 'en-US'))}</small>${x.approval_note ? `<small>${esc(x.approval_note)}</small>` : ''}</div><div class="request-actions">${actions}</div></article>`;
+  }).join('');
+  target.querySelectorAll('[data-op-status]').forEach(button => button.addEventListener('click', () => reviewOperator(button.dataset.id, button.dataset.opStatus)));
+  target.querySelectorAll('[data-op-delete]').forEach(button => button.addEventListener('click', () => deleteOperator(button.dataset.id)));
+}
+async function reviewOperator(id, status) {
+  const title = { APPROVED: lang === 'ID' ? 'Setujui Operator?' : 'Approve Operator?', REJECTED: lang === 'ID' ? 'Tolak Operator?' : 'Reject Operator?', SUSPENDED: lang === 'ID' ? 'Tangguhkan Operator?' : 'Suspend Operator?' }[status];
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${esc(title)}</h2><p class="muted">${lang === 'ID' ? 'Tindakan ini hanya mengubah akses Operator, bukan status akses client.' : 'This changes Operator access only, not the client access status.'}</p><label class="modal-note-label">${esc(t('note'))}<textarea rows="3" maxlength="1000" id="operator-note"></textarea></label><div id="operator-modal-message"></div><div class="modal-actions"><button class="button quiet" id="operator-cancel">${t('cancel')}</button><button class="button ${status === 'APPROVED' ? 'primary' : 'danger'}" id="operator-confirm">${t('confirm')}</button></div></section>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#operator-cancel').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelector('#operator-confirm').onclick = async () => {
+    const btn = modal.querySelector('#operator-confirm'); btn.disabled = true; btn.textContent = t('saving');
+    const { error } = await supabase.rpc('sellerbooks_core_review_operator', { p_id: id, p_status: status, p_note: modal.querySelector('#operator-note').value.trim() || null });
+    if (error) { modal.querySelector('#operator-modal-message').innerHTML = alertBox(`${t('loadError')} ${error.message}`, 'error'); btn.disabled = false; btn.textContent = t('confirm'); return; }
+    modal.remove(); await loadOperators();
+  };
+}
+async function deleteOperator(id) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true"><h2>${lang === 'ID' ? 'Hapus data Operator?' : 'Delete Operator record?'}</h2><p class="muted">${lang === 'ID' ? 'Data permintaan ini akan dihapus permanen.' : 'This request record will be permanently deleted.'}</p><div class="modal-actions"><button class="button quiet" id="operator-cancel">${t('cancel')}</button><button class="button danger" id="operator-confirm">${t('confirm')}</button></div></section>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#operator-cancel').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelector('#operator-confirm').onclick = async () => {
+    const btn = modal.querySelector('#operator-confirm'); btn.disabled = true; btn.textContent = t('saving');
+    const { error } = await supabase.rpc('sellerbooks_core_delete_operator', { p_id: id });
+    if (error) { modal.querySelector('.confirm-modal').insertAdjacentHTML('beforeend', alertBox(`${t('loadError')} ${error.message}`, 'error')); btn.disabled = false; btn.textContent = t('confirm'); return; }
+    modal.remove(); await loadOperators();
+  };
+}
+
 function openReviewModal(userId, status, triggerButton) {
   document.querySelector('#review-modal')?.remove();
   const title = copy[lang].confirmTitle?.[status] || t('confirm');
