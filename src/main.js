@@ -139,7 +139,9 @@ async function initialize() {
     }
 
     let requestData = null;
-    if (!accessRes.error && !accessRes.data) {
+    // Mirror the working Operator lifecycle: a missing request is recreated.
+    // Do not let a failed preliminary SELECT suppress the request RPC.
+    if (!accessRes.data) {
       const { data, error } = await supabase.rpc('sellerbooks_request_access');
       requestData = data || null;
       if (error) {
@@ -147,7 +149,7 @@ async function initialize() {
         accessRequestError = error.message;
       }
 
-      // Read again after the RPC instead of relying only on its return payload.
+      // Re-read after the RPC; the database row is authoritative.
       accessRes = await supabase.from('sellerbooks_client_access')
         .select('status,requested_at,review_note')
         .eq('user_id', currentUser.id)
