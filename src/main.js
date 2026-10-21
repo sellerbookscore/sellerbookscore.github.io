@@ -15,6 +15,7 @@ try {
 let lang = localStorage.getItem('sellerbooks-core-language') === 'EN' ? 'EN' : 'ID';
 let currentUser = null;
 let currentAccess = null;
+let accessRequestError = null;
 let isAdmin = false;
 let initializationPromise = null;
 
@@ -117,6 +118,7 @@ async function initialize() {
       return authView('login', alertBox(`${t('oauthCallbackError')}${sessionError.message}`, 'error'));
     }
     currentUser = data.session?.user || null;
+    accessRequestError = null;
     if (!currentUser) { authView(); return; }
     const [adminRes, accessRes] = await Promise.all([
       supabase.from('sellerbooks_core_admins').select('role,is_active').eq('user_id', currentUser.id).maybeSingle(),
@@ -128,11 +130,18 @@ async function initialize() {
     currentAccess = accessRes.data;
     if (isAdmin) { await adminView(); return; }
     if (!currentAccess) {
-      const { error: requestError } = await supabase.rpc('sellerbooks_request_access');
-      if (requestError) console.warn('SellerBooks Core access request failed:', requestError);
+      const { data: requestData, error: requestError } = await supabase.rpc('sellerbooks_request_access');
+      if (requestError) {
+        console.error('SellerBooks Core access request failed:', requestError);
+        accessRequestError = requestError.message;
+      }
       const refreshed = await supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle();
-      if (refreshed.error) console.warn('SellerBooks Core access refresh failed:', refreshed.error);
-      currentAccess = refreshed.data;
+      if (refreshed.error) {
+        console.error('SellerBooks Core access refresh failed:', refreshed.error);
+        accessRequestError = refreshed.error.message;
+      }
+      currentAccess = refreshed.data || requestData || null;
+      if (!currentAccess && !accessRequestError) accessRequestError = 'Permintaan akses belum berhasil dibuat. Silakan tekan Muat ulang.';
     }
     render();
   })();
@@ -146,7 +155,7 @@ function clientView() {
   const status = String(currentAccess?.status || 'PENDING').toUpperCase();
   const statusClass = status === 'APPROVED' ? 'good' : status === 'REJECTED' || status === 'SUSPENDED' || status === 'REVOKED' ? 'bad' : 'waiting';
   const messageKey = status === 'APPROVED' ? 'approved' : status === 'REJECTED' || status === 'REVOKED' ? 'rejected' : status === 'SUSPENDED' ? 'suspended' : 'pending';
-  shell(`<section class="dashboard"><div class="welcome"><div><div class="eyebrow">SELLERBOOKS CORE</div><h1>${lang === 'ID' ? 'Halo, selamat datang.' : 'Welcome back.'}</h1><p class="muted">${esc(currentUser.email)}</p></div><span class="status ${statusClass}">${esc(status)}</span></div><div class="panel status-panel"><div class="status-icon">${status === 'APPROVED' ? '✓' : '…'}</div><div><h2>${t('accessTitle')}</h2><p>${t(messageKey)}</p>${currentAccess?.review_note ? `<p class="muted">${esc(currentAccess.review_note)}</p>` : ''}</div></div>${status === 'APPROVED' ? `<div class="panel"><h2>${lang === 'ID' ? 'Akses aplikasi' : 'Application access'}</h2><p class="muted">${lang === 'ID' ? 'Status Core sudah disetujui. Integrasi dashboard operasional SellerBooks akan ditambahkan pada tahap berikutnya.' : 'Core access is approved. The SellerBooks operations dashboard integration will be added in a later step.'}</p></div>` : ''}<button id="reload" class="button quiet">${t('refresh')}</button></section>`);
+  shell(`<section class="dashboard"><div class="welcome"><div><div class="eyebrow">SELLERBOOKS CORE</div><h1>${lang === 'ID' ? 'Halo, selamat datang.' : 'Welcome back.'}</h1><p class="muted">${esc(currentUser.email)}</p></div><span class="status ${statusClass}">${esc(status)}</span></div><div class="panel status-panel"><div class="status-icon">${status === 'APPROVED' ? '✓' : '…'}</div><div><h2>${t('accessTitle')}</h2><p>${t(messageKey)}</p>${currentAccess?.review_note ? `<p class="muted">${esc(currentAccess.review_note)}</p>` : ''}</div></div>${status === 'APPROVED' ? `<div class="panel"><h2>${lang === 'ID' ? 'Akses aplikasi' : 'Application access'}</h2><p class="muted">${lang === 'ID' ? 'Status Core sudah disetujui. Integrasi dashboard operasional SellerBooks akan ditambahkan pada tahap berikutnya.' : 'Core access is approved. The SellerBooks operations dashboard integration will be added in a later step.'}</p></div>` : ''}${accessRequestError ? alertBox(`${lang === 'ID' ? 'Gagal membuat permintaan persetujuan:' : 'Failed to create access request:'} ${accessRequestError}`, 'error') : ''}<button id="reload" class="button quiet">${t('refresh')}</button></section>`);
   document.querySelector('#reload').onclick = initialize;
 }
 async function adminView() {
