@@ -25,7 +25,7 @@ const copy = {
     pending: 'Pendaftaran Anda sedang menunggu persetujuan Superadmin.', rejected: 'Pendaftaran Anda ditolak. Hubungi administrator jika perlu peninjauan.',
     suspended: 'Akses akun Anda sedang ditangguhkan.', approved: 'Akun Anda disetujui. Portal aplikasi siap dihubungkan.',
     admin: 'Panel Superadmin', users: 'Permintaan akses client', refresh: 'Muat ulang', approve: 'Setujui', reject: 'Tolak', suspend: 'Tangguhkan',
-    status: 'Status', id: 'ID pengguna', signout: 'Keluar', language: 'Bahasa', note: 'Catatan (opsional)',
+    status: 'Status', id: 'ID pengguna', signout: 'Keluar', language: 'Bahasa', note: 'Catatan (opsional)', confirmTitle: { APPROVED: 'Setujui permintaan akses?', REJECTED: 'Tolak permintaan akses?', SUSPENDED: 'Tangguhkan akses client?' }, confirmBody: 'Tindakan ini akan memperbarui status akses client.', cancel: 'Batal', confirm: 'Konfirmasi', saving: 'Menyimpan perubahan…', saved: 'Status akses berhasil diperbarui.',
     config: supabaseInitError ? `Inisialisasi Supabase gagal: ${supabaseInitError}` : 'Konfigurasi belum lengkap. Atur VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment deployment.',
     loadError: 'Gagal memuat data.', empty: 'Belum ada permintaan akses.', signedIn: 'Berhasil masuk.', registerOk: 'Pendaftaran dikirim. Periksa email jika konfirmasi diminta.',
     googleError: 'Google Login belum siap. Periksa konfigurasi provider dan URL redirect di Supabase.', oauthCallbackError: 'Login Google belum selesai: ', notAdmin: 'Akun ini bukan Superadmin.',
@@ -37,7 +37,7 @@ const copy = {
     pending: 'Your registration is waiting for Superadmin approval.', rejected: 'Your registration was rejected. Contact an administrator if you need a review.',
     suspended: 'Your account access is suspended.', approved: 'Your account is approved. The application portal can now be connected.',
     admin: 'Superadmin panel', users: 'Client access requests', refresh: 'Refresh', approve: 'Approve', reject: 'Reject', suspend: 'Suspend',
-    status: 'Status', id: 'User ID', signout: 'Sign out', language: 'Language', note: 'Note (optional)',
+    status: 'Status', id: 'User ID', signout: 'Sign out', language: 'Language', note: 'Note (optional)', confirmTitle: { APPROVED: 'Approve access request?', REJECTED: 'Reject access request?', SUSPENDED: 'Suspend client access?' }, confirmBody: 'This action will update the client access status.', cancel: 'Cancel', confirm: 'Confirm', saving: 'Saving changes…', saved: 'Access status updated successfully.',
     config: supabaseInitError ? `Supabase initialization failed: ${supabaseInitError}` : 'Configuration is incomplete. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment environment.',
     loadError: 'Failed to load data.', empty: 'No access requests yet.', signedIn: 'Signed in successfully.', registerOk: 'Registration submitted. Check your email if confirmation is required.',
     googleError: 'Google Login is not ready. Check the provider and redirect URL configuration in Supabase.', oauthCallbackError: 'Google sign-in could not be completed: ', notAdmin: 'This account is not a Superadmin.',
@@ -160,15 +160,55 @@ async function loadRequests() {
   if (error) { target.innerHTML = alertBox(`${t('loadError')} ${error.message}`, 'error'); return; }
   if (!data?.length) { target.innerHTML = `<p class="muted">${t('empty')}</p>`; return; }
   target.innerHTML = data.map((item) => `<article class="request"><div class="request-info"><strong>${esc(item.email || item.user_id)}</strong><small>${esc(item.user_id)}</small><span class="status ${item.status === 'APPROVED' ? 'good' : item.status === 'REJECTED' || item.status === 'SUSPENDED' || item.status === 'REVOKED' ? 'bad' : 'waiting'}">${esc(item.status)}</span><small>${esc(new Date(item.requested_at).toLocaleString(lang === 'ID' ? 'id-ID' : 'en-US'))}</small>${item.review_note ? `<small>${esc(item.review_note)}</small>` : ''}</div><div class="request-actions"><button class="button small primary" data-status="APPROVED" data-id="${esc(item.user_id)}">${t('approve')}</button><button class="button small quiet" data-status="REJECTED" data-id="${esc(item.user_id)}">${t('reject')}</button><button class="button small danger" data-status="SUSPENDED" data-id="${esc(item.user_id)}">${t('suspend')}</button></div></article>`).join('');
-  target.querySelectorAll('[data-status]').forEach((button) => button.addEventListener('click', async () => {
-    const note = window.prompt(t('note'));
-    if (note === null) return;
-    button.disabled = true;
-    const { error: reviewError } = await supabase.rpc('sellerbooks_review_client_access', { p_user_id: button.dataset.id, p_status: button.dataset.status, p_note: note || null });
-    if (reviewError) { window.alert(`${t('loadError')} ${reviewError.message}`); button.disabled = false; return; }
-    await loadRequests();
+  target.querySelectorAll('[data-status]').forEach((button) => button.addEventListener('click', () => {
+    openReviewModal(button.dataset.id, button.dataset.status, button);
   }));
 }
+function openReviewModal(userId, status, triggerButton) {
+  document.querySelector('#review-modal')?.remove();
+  const title = copy[lang].confirmTitle?.[status] || t('confirm');
+  const modal = document.createElement('div');
+  modal.id = 'review-modal';
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `<section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
+    <div class="modal-symbol ${status === 'APPROVED' ? 'modal-success' : status === 'REJECTED' ? 'modal-reject' : 'modal-suspend'}">${status === 'APPROVED' ? '✓' : status === 'REJECTED' ? '×' : '!'}</div>
+    <h2 id="review-modal-title">${esc(title)}</h2>
+    <p class="muted">${esc(t('confirmBody'))}</p>
+    <label class="modal-note-label">${esc(t('note'))}<textarea id="review-note" rows="3" maxlength="1000" placeholder="${esc(t('note'))}"></textarea></label>
+    <div id="review-modal-message" aria-live="polite"></div>
+    <div class="modal-actions"><button type="button" id="review-cancel" class="button quiet">${esc(t('cancel'))}</button><button type="button" id="review-confirm" class="button ${status === 'SUSPENDED' || status === 'REJECTED' ? 'danger' : 'primary'}">${esc(t('confirm'))}</button></div>
+  </section>`;
+  document.body.appendChild(modal);
+  const cancel = () => modal.remove();
+  modal.addEventListener('click', (event) => { if (event.target === modal) cancel(); });
+  modal.querySelector('#review-cancel').addEventListener('click', cancel);
+  modal.querySelector('#review-confirm').addEventListener('click', async () => {
+    const confirmButton = modal.querySelector('#review-confirm');
+    const cancelButton = modal.querySelector('#review-cancel');
+    const message = modal.querySelector('#review-modal-message');
+    const note = modal.querySelector('#review-note').value.trim();
+    confirmButton.disabled = true;
+    cancelButton.disabled = true;
+    confirmButton.textContent = t('saving');
+    if (triggerButton) triggerButton.disabled = true;
+    const { error: reviewError } = await supabase.rpc('sellerbooks_review_client_access', {
+      p_user_id: userId, p_status: status, p_note: note || null
+    });
+    if (reviewError) {
+      message.innerHTML = alertBox(`${t('loadError')} ${reviewError.message}`, 'error');
+      confirmButton.disabled = false;
+      cancelButton.disabled = false;
+      confirmButton.textContent = t('confirm');
+      if (triggerButton) triggerButton.disabled = false;
+      return;
+    }
+    message.innerHTML = alertBox(t('saved'), 'success');
+    confirmButton.textContent = t('saved');
+    window.setTimeout(async () => { modal.remove(); await loadRequests(); }, 450);
+  });
+  modal.querySelector('#review-note').focus();
+}
+
 function render() {
   if (!currentUser) { authView(); return; }
   if (isAdmin) { adminView(); return; }
