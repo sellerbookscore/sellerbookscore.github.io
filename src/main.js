@@ -120,28 +120,30 @@ async function initialize() {
     currentUser = data.session?.user || null;
     accessRequestError = null;
     if (!currentUser) { authView(); return; }
-    const [adminRes, accessRes] = await Promise.all([
-      supabase.from('sellerbooks_core_admins').select('role,is_active').eq('user_id', currentUser.id).maybeSingle(),
-      supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle(),
-    ]);
+    const adminRes = await supabase.from('sellerbooks_core_admins').select('role,is_active').eq('user_id', currentUser.id).maybeSingle();
     if (adminRes.error) console.warn('SellerBooks Core admin lookup failed:', adminRes.error);
-    if (accessRes.error) console.warn('SellerBooks Core access lookup failed:', accessRes.error);
     isAdmin = Boolean(adminRes.data?.is_active && ['superadmin', 'admin'].includes(adminRes.data?.role));
-    currentAccess = accessRes.data;
     if (isAdmin) { await adminView(); return; }
-    if (!currentAccess) {
-      const { data: requestData, error: requestError } = await supabase.rpc('sellerbooks_request_access');
-      if (requestError) {
-        console.error('SellerBooks Core access request failed:', requestError);
-        accessRequestError = requestError.message;
-      }
-      const refreshed = await supabase.from('sellerbooks_client_access').select('status,requested_at,review_note').eq('user_id', currentUser.id).maybeSingle();
-      if (refreshed.error) {
-        console.error('SellerBooks Core access refresh failed:', refreshed.error);
-        accessRequestError = refreshed.error.message;
-      }
-      currentAccess = refreshed.data || requestData || null;
-      if (!currentAccess && !accessRequestError) accessRequestError = 'Permintaan akses belum berhasil dibuat. Silakan tekan Muat ulang.';
+
+    // Same lifecycle as Operator: ask the database for access on each authenticated login.
+    // The RPC is idempotent and keeps existing statuses; a deleted request becomes PENDING again.
+    const { data: requestData, error: requestError } = await supabase.rpc('sellerbooks_request_access');
+    if (requestError) {
+      console.error('SellerBooks Core access request failed:', requestError);
+      accessRequestError = requestError.message;
+    }
+
+    const accessRes = await supabase.from('sellerbooks_client_access')
+      .select('status,requested_at,review_note')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (accessRes.error) {
+      console.error('SellerBooks Core access refresh failed:', accessRes.error);
+      accessRequestError = accessRes.error.message;
+    }
+    currentAccess = accessRes.data || requestData || null;
+    if (!currentAccess && !accessRequestError) {
+      accessRequestError = 'Permintaan akses belum berhasil dibuat. Silakan tekan Muat ulang.';
     }
     render();
   })();
